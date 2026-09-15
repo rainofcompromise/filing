@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>파일명 일괄 변경기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --paper:#f7f6f2;
+    --ink:#1f2421;
+    --ink-soft:#5b6560;
+    --line:#d8d6cd;
+    --accent:#2d6a5f;
+    --accent-dark:#1f4d45;
+    --accent-tint:#e3ede9;
+    --warn:#a44a3f;
+    --warn-tint:#f6e9e7;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:56px 20px 100px;
+  }
+  .sheet{ width:100%; max-width:760px; }
+  .kicker{ font-size:13px; color:var(--ink-soft); margin-bottom:6px; }
+  h1{ font-size:28px; margin:0 0 8px; font-weight:600; letter-spacing:-0.01em; }
+  .sub{ color:var(--ink-soft); font-size:14.5px; line-height:1.6; margin:0 0 14px; max-width:60ch; }
+  .capability{
+    font-size:12.5px;
+    padding:9px 12px;
+    border-radius:3px;
+    margin-bottom:28px;
+    display:inline-block;
+  }
+  .capability.ok{ background:var(--accent-tint); color:var(--accent-dark); }
+  .capability.limited{ background:var(--warn-tint); color:var(--warn); }
+  .panel{
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:#fff;
+    padding:26px 28px;
+    margin-bottom:20px;
+  }
+  .panel h2{
+    font-size:15px;
+    font-weight:600;
+    margin:0 0 4px;
+  }
+  .panel .desc{
+    font-size:13px;
+    color:var(--ink-soft);
+    margin:0 0 18px;
+    line-height:1.5;
+  }
+  .row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  input[type="file"]{ display:none; }
+  .btn{
+    appearance:none;
+    border:1px solid var(--accent);
+    background:var(--accent);
+    color:#fff;
+    font-size:14px;
+    font-weight:500;
+    padding:9px 16px;
+    border-radius:3px;
+    cursor:pointer;
+    font-family:inherit;
+    transition:background 0.12s ease, transform 0.05s ease;
+    white-space:nowrap;
+  }
+  .btn:hover{ background:var(--accent-dark); border-color:var(--accent-dark); }
+  .btn:active{ transform:scale(0.98); }
+  .btn.secondary{ background:#fff; color:var(--accent-dark); border:1px solid var(--line); }
+  .btn.secondary:hover{ background:var(--accent-tint); border-color:var(--accent); }
+  .btn.danger{ background:var(--warn); border-color:var(--warn); }
+  .btn.danger:hover{ background:#8a3d33; border-color:#8a3d33; }
+  .btn:disabled{ background:#e8e7e2; border-color:#e8e7e2; color:#a3a29c; cursor:not-allowed; }
+  .btn.small{ padding:5px 10px; font-size:12.5px; }
+  .status{ font-size:13.5px; color:var(--ink-soft); }
+
+  .field{ margin-bottom:16px; }
+  .field:last-child{ margin-bottom:0; }
+  .field label{ display:block; font-size:13px; color:var(--ink); margin-bottom:6px; font-weight:500; }
+  .field input[type="text"]{
+    width:100%;
+    padding:8px 10px;
+    border:1px solid var(--line);
+    border-radius:3px;
+    font-size:13.5px;
+    font-family:inherit;
+    background:#fdfdfc;
+  }
+  .field input[type="text"]:focus{ outline:none; border-color:var(--accent); }
+
+  .chip-group{ display:flex; flex-wrap:wrap; gap:8px 16px; margin-bottom:14px; }
+  .chip-group label{
+    display:flex; align-items:center; gap:6px;
+    font-size:13.5px; cursor:pointer; color:var(--ink);
+  }
+
+  .subgrid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:520px){ .subgrid{ grid-template-columns:1fr; } }
+
+  .dyn-row{
+    display:grid;
+    grid-template-columns:1fr 1fr auto;
+    gap:8px;
+    margin-bottom:8px;
+    align-items:center;
+  }
+  .dyn-row.triple{ grid-template-columns:1fr 1fr 1fr auto; }
+  @media (max-width:600px){
+    .dyn-row, .dyn-row.triple{ grid-template-columns:1fr; }
+  }
+  .dyn-row input[type="text"]{
+    padding:7px 9px; border:1px solid var(--line); border-radius:3px;
+    font-size:13px; font-family:inherit; background:#fdfdfc;
+  }
+  .dyn-row input[type="text"]:focus{ outline:none; border-color:var(--accent); }
+  .remove-row{
+    border:none; background:transparent; color:var(--ink-soft);
+    cursor:pointer; font-size:16px; padding:2px 8px; line-height:1;
+  }
+  .remove-row:hover{ color:var(--warn); }
+  .add-row{
+    background:none; border:1px dashed var(--line); color:var(--ink-soft);
+    font-size:12.5px; padding:6px 12px; border-radius:3px; cursor:pointer;
+    font-family:inherit; margin-top:2px;
+  }
+  .add-row:hover{ border-color:var(--accent); color:var(--accent-dark); }
+
+  .divider{ border-top:1px solid var(--line); margin:20px 0; }
+
+  .order-note{ font-size:12px; color:var(--ink-soft); margin-top:18px; line-height:1.6; }
+
+  .list-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px; flex-wrap:wrap; gap:8px; }
+  .count{ font-size:13px; color:var(--ink-soft); font-family:var(--mono); }
+  .collision-warn{ font-size:12.5px; color:var(--warn); }
+
+  .file-table{ max-height:380px; overflow-y:auto; border:1px solid var(--line); border-radius:3px; }
+  .file-header-row, .file-row{
+    display:grid; grid-template-columns:28px 1fr 16px 1fr;
+    gap:10px; padding:8px 14px; font-family:var(--mono); font-size:12.5px; align-items:center;
+  }
+  .file-header-row{
+    background:#f2f1ec; font-family:var(--sans); font-weight:600; font-size:12px;
+    color:var(--ink-soft); position:sticky; top:0;
+  }
+  .file-row{ border-top:1px solid var(--line); }
+  .file-row.changed{ background:#fbfbf7; }
+  .file-row.collision{ background:var(--warn-tint); }
+  .file-row .idx{ color:var(--ink-soft); }
+  .file-row .name{ word-break:break-all; }
+  .file-row .name.old{ color:var(--ink-soft); }
+  .file-row .name.new{ color:var(--accent-dark); font-weight:500; }
+  .arrow{ color:var(--ink-soft); text-align:center; }
+  .empty{ padding:32px 14px; text-align:center; color:var(--ink-soft); font-size:13.5px; }
+
+  .action-row{ display:flex; gap:10px; flex-wrap:wrap; margin-top:20px; }
+  .note{ font-size:12px; color:var(--ink-soft); line-height:1.6; margin-top:14px; }
+  .progress{ font-size:13px; color:var(--accent-dark); margin-top:10px; display:none; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="kicker">학교 업무용 도구</div>
+  <h1>파일명 일괄 변경기</h1>
+  <p class="sub">폴더 안의 여러 파일명을 한 번에 정리합니다. 특정 문자 삭제, 접두어·접미어 추가, 찾아바꾸기, 특정 단어 앞뒤에 문자 끼워넣기를 조합해서 규칙을 만들면 실시간으로 미리보기가 갱신됩니다.</p>
+  <div id="capabilityBox" class="capability"></div>
+
+  <div class="panel">
+    <h2>1. 폴더 선택</h2>
+    <p class="desc">폴더를 선택하면 안의 파일 목록을 불러옵니다. 하위 폴더는 포함하지 않습니다.</p>
+    <div class="row">
+      <button class="btn" id="pickFolderBtn">폴더 선택</button>
+      <input type="file" id="legacyInput" webkitdirectory directory multiple>
+      <span class="status" id="statusText">선택된 폴더 없음</span>
+    </div>
+    <div class="field" style="margin-top:16px;">
+      <label>확장자 필터 (비워두면 모든 파일 대상, 쉼표로 구분)</label>
+      <input type="text" id="extFilter" placeholder="예: xlsx, xls, csv">
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>2. 변경 규칙</h2>
+    <p class="desc">아래 항목은 조합해서 함께 적용할 수 있습니다. 확장자(.xlsx 등)는 규칙과 무관하게 항상 보존됩니다.</p>
+
+    <div class="field">
+      <label>제거할 문자</label>
+      <div class="chip-group" id="removeChips">
+        <label><input type="checkbox" value=" "> 공백</label>
+        <label><input type="checkbox" value="."> 마침표(.)</label>
+        <label><input type="checkbox" value="!"> 느낌표(!)</label>
+        <label><input type="checkbox" value="?"> 물음표(?)</label>
+        <label><input type="checkbox" value=","> 쉼표(,)</label>
+        <label><input type="checkbox" value="_"> 언더바(_)</label>
+        <label><input type="checkbox" value="-"> 하이픈(-)</label>
+        <label><input type="checkbox" value="("> 괄호 (</label>
+        <label><input type="checkbox" value=")"> 괄호 )</label>
+      </div>
+      <input type="text" id="customRemove" placeholder="추가로 제거할 문자/단어 (쉼표로 구분, 예: 최종, v2)">
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="field">
+      <label>찾아서 바꾸기</label>
+      <div id="replaceRows"></div>
+      <button class="add-row" id="addReplaceRow">+ 찾아바꾸기 추가</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="field">
+      <label>특정 단어 앞/뒤에 문자 끼워넣기</label>
+      <div id="insertRows"></div>
+      <button class="add-row" id="addInsertRow">+ 끼워넣기 규칙 추가</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="subgrid">
+      <div class="field">
+        <label>공통 접두어 (파일명 맨 앞)</label>
+        <input type="text" id="prefixInput" placeholder="예: 2026_">
+      </div>
+      <div class="field">
+        <label>공통 접미어 (확장자 앞)</label>
+        <input type="text" id="suffixInput" placeholder="예: _제출용">
+      </div>
+    </div>
+
+    <p class="order-note">적용 순서: 문자 제거 → 찾아바꾸기 → 단어 앞뒤 끼워넣기 → 접두어/접미어</p>
+  </div>
+
+  <div class="panel">
+    <div class="list-head">
+      <h2 style="margin:0;">3. 미리보기</h2>
+      <span class="count" id="countText">0개</span>
+    </div>
+    <div id="collisionWarn" class="collision-warn" style="display:none; margin-bottom:10px;"></div>
+    <div class="file-table" id="fileTable">
+      <div class="empty">폴더를 선택하면 여기에 변경 전/후 이름이 표시됩니다.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>4. 파일명 모아서 엑셀로 저장</h2>
+    <p class="desc">규칙 적용과 상관없이, 현재 불러온 파일들의 이름만 따로 정리해 엑셀 목록으로 저장합니다.</p>
+    <div class="chip-group" style="margin-bottom:14px;">
+      <label><input type="radio" name="collectExt" value="withExt" checked> 확장자 포함</label>
+      <label><input type="radio" name="collectExt" value="noExt"> 확장자 제외</label>
+    </div>
+    <div class="chip-group" style="margin-bottom:0;">
+      <label><input type="checkbox" id="collectSort" checked> 이름순 정렬</label>
+    </div>
+    <div class="action-row">
+      <button class="btn secondary" id="collectNamesBtn" disabled>파일명 엑셀로 모으기</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>5. 적용</h2>
+    <p class="desc">Chrome·Edge(데스크톱)에서 폴더를 선택했다면 브라우저 안에서 바로 이름을 바꿀 수 있습니다. 그 외 환경에서는 배치파일을 받아 폴더 안에서 실행하세요.</p>
+    <div class="action-row">
+      <button class="btn danger" id="applyNowBtn" disabled>지금 바로 이름 변경</button>
+      <button class="btn secondary" id="downloadBatBtn" disabled>Windows 배치파일(.bat) 다운로드</button>
+      <button class="btn secondary" id="exportListBtn" disabled>변경 목록 엑셀로 저장</button>
+    </div>
+    <div class="progress" id="progressText"></div>
+    <p class="note">배치파일은 다운로드 후 파일이 들어있는 폴더 안으로 옮긴 뒤 더블클릭해서 실행합니다. "지금 바로 이름 변경"은 실행을 되돌릴 수 없으니 실행 전 미리보기를 꼭 확인하세요.</p>
+  </div>
+</div>
+
+<script>
+const supportsFS = 'showDirectoryPicker' in window;
+const capabilityBox = document.getElementById('capabilityBox');
+if(supportsFS){
+  capabilityBox.className = 'capability ok';
+  capabilityBox.textContent = '이 브라우저는 실시간 이름 변경을 지원합니다 (Chrome / Edge)';
+}else{
+  capabilityBox.className = 'capability limited';
+  capabilityBox.textContent = '이 브라우저는 실시간 이름 변경을 지원하지 않습니다. 미리보기 후 배치파일을 받아 실행해주세요.';
+}
+
+let mode = null; // 'fsapi' | 'legacy'
+let dirHandle = null;
+let entries = []; // {name, handle?, fileObj?}
+let planned = []; // {oldName, newName, collision:bool}
+
+const pickFolderBtn = document.getElementById('pickFolderBtn');
+const legacyInput = document.getElementById('legacyInput');
+const statusText = document.getElementById('statusText');
+const extFilter = document.getElementById('extFilter');
+const fileTable = document.getElementById('fileTable');
+const countText = document.getElementById('countText');
+const collisionWarn = document.getElementById('collisionWarn');
+const applyNowBtn = document.getElementById('applyNowBtn');
+const downloadBatBtn = document.getElementById('downloadBatBtn');
+const exportListBtn = document.getElementById('exportListBtn');
+const collectNamesBtn = document.getElementById('collectNamesBtn');
+const progressText = document.getElementById('progressText');
+
+pickFolderBtn.addEventListener('click', async () => {
+  if(supportsFS){
+    try{
+      dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      mode = 'fsapi';
+      entries = [];
+      for await (const [name, handle] of dirHandle.entries()){
+        if(handle.kind === 'file') entries.push({ name, handle });
+      }
+      statusText.textContent = `"${dirHandle.name}" · 파일 ${entries.length}개 불러옴 (실시간 변경 가능)`;
+      recompute();
+    }catch(err){
+      if(err.name !== 'AbortError') console.error(err);
+    }
+  }else{
+    legacyInput.click();
+  }
+});
+
+legacyInput.addEventListener('change', (e) => {
+  const files = Array.from(e.target.files || []);
+  entries = files.map(f => ({ name: f.name, fileObj: f }));
+  mode = 'legacy';
+  const folderLabel = files.length > 0 && files[0].webkitRelativePath
+    ? files[0].webkitRelativePath.split('/')[0]
+    : '선택한 폴더';
+  statusText.textContent = `"${folderLabel}" · 파일 ${entries.length}개 불러옴 (배치파일로 적용)`;
+  recompute();
+});
+
+extFilter.addEventListener('input', recompute);
+
+// --- 찾아바꾸기 동적 행 ---
+const replaceRows = document.getElementById('replaceRows');
+const addReplaceRow = document.getElementById('addReplaceRow');
+function makeReplaceRow(){
+  const row = document.createElement('div');
+  row.className = 'dyn-row';
+  row.innerHTML = `
+    <input type="text" class="find-input" placeholder="찾을 문자열">
+    <input type="text" class="replace-input" placeholder="바꿀 문자열 (비우면 삭제)">
+    <button type="button" class="remove-row" title="삭제">✕</button>
+  `;
+  row.querySelector('.remove-row').addEventListener('click', () => { row.remove(); recompute(); });
+  row.querySelectorAll('input').forEach(inp => inp.addEventListener('input', recompute));
+  replaceRows.appendChild(row);
+}
+addReplaceRow.addEventListener('click', makeReplaceRow);
+makeReplaceRow();
+
+// --- 단어 앞/뒤 끼워넣기 동적 행 ---
+const insertRows = document.getElementById('insertRows');
+const addInsertRow = document.getElementById('addInsertRow');
+function makeInsertRow(){
+  const row = document.createElement('div');
+  row.className = 'dyn-row triple';
+  row.innerHTML = `
+    <input type="text" class="word-input" placeholder="기준 단어">
+    <input type="text" class="before-input" placeholder="앞에 끼워넣을 문자">
+    <input type="text" class="after-input" placeholder="뒤에 끼워넣을 문자">
+    <button type="button" class="remove-row" title="삭제">✕</button>
+  `;
+  row.querySelector('.remove-row').addEventListener('click', () => { row.remove(); recompute(); });
+  row.querySelectorAll('input').forEach(inp => inp.addEventListener('input', recompute));
+  insertRows.appendChild(row);
+}
+addInsertRow.addEventListener('click', makeInsertRow);
+makeInsertRow();
+
+document.getElementById('removeChips').addEventListener('change', recompute);
+document.getElementById('customRemove').addEventListener('input', recompute);
+document.getElementById('prefixInput').addEventListener('input', recompute);
+document.getElementById('suffixInput').addEventListener('input', recompute);
+
+function splitExt(name){
+  const idx = name.lastIndexOf('.');
+  if(idx <= 0) return { base: name, ext: '' };
+  return { base: name.substring(0, idx), ext: name.substring(idx + 1) };
+}
+
+function getRemoveList(){
+  const checked = Array.from(document.querySelectorAll('#removeChips input:checked')).map(c => c.value);
+  const custom = document.getElementById('customRemove').value
+    .split(',').map(s => s.trim()).filter(Boolean);
+  return [...checked, ...custom];
+}
+
+function getReplacePairs(){
+  return Array.from(replaceRows.children).map(row => ({
+    find: row.querySelector('.find-input').value,
+    replace: row.querySelector('.replace-input').value
+  })).filter(p => p.find.length > 0);
+}
+
+function getInsertRules(){
+  return Array.from(insertRows.children).map(row => ({
+    word: row.querySelector('.word-input').value,
+    before: row.querySelector('.before-input').value,
+    after: row.querySelector('.after-input').value
+  })).filter(r => r.word.length > 0);
+}
+
+function applyRules(name){
+  const { base: origBase, ext } = splitExt(name);
+  let base = origBase;
+
+  getRemoveList().forEach(ch => { if(ch) base = base.split(ch).join(''); });
+  getReplacePairs().forEach(p => { base = base.split(p.find).join(p.replace || ''); });
+  getInsertRules().forEach(r => { base = base.split(r.word).join((r.before||'') + r.word + (r.after||'')); });
+
+  const prefix = document.getElementById('prefixInput').value || '';
+  const suffix = document.getElementById('suffixInput').value || '';
+  base = prefix + base + suffix;
+
+  return ext ? base + '.' + ext : base;
+}
+
+function matchesExtFilter(name){
+  const raw = extFilter.value.trim();
+  if(!raw) return true;
+  const list = raw.split(',').map(s => s.trim().toLowerCase().replace(/^\./, '')).filter(Boolean);
+  const lower = name.toLowerCase();
+  return list.some(ext => lower.endsWith('.' + ext));
+}
+
+function recompute(){
+  const filtered = entries.filter(e => matchesExtFilter(e.name));
+  const newNameCounts = {};
+  planned = filtered.map(e => {
+    const newName = applyRules(e.name);
+    newNameCounts[newName] = (newNameCounts[newName] || 0) + 1;
+    return { entry: e, oldName: e.name, newName };
+  }).map(p => ({ ...p, collision: newNameCounts[p.newName] > 1 }));
+
+  countText.textContent = planned.length + '개';
+
+  if(planned.length === 0){
+    fileTable.innerHTML = '<div class="empty">표시할 파일이 없습니다.</div>';
+    collisionWarn.style.display = 'none';
+    applyNowBtn.disabled = true;
+    downloadBatBtn.disabled = true;
+    exportListBtn.disabled = true;
+    collectNamesBtn.disabled = true;
+    return;
+  }
+
+  const collisionCount = planned.filter(p => p.collision).length;
+  if(collisionCount > 0){
+    collisionWarn.style.display = 'block';
+    collisionWarn.textContent = `⚠ 변경 후 이름이 겹치는 파일이 ${collisionCount}개 있습니다. 겹치는 항목은 자동 적용에서 제외됩니다.`;
+  }else{
+    collisionWarn.style.display = 'none';
+  }
+
+  const rowsHtml = planned.map((p, i) => {
+    const changed = p.oldName !== p.newName;
+    const cls = p.collision ? 'file-row collision' : (changed ? 'file-row changed' : 'file-row');
+    return `
+      <div class="${cls}">
+        <span class="idx">${i + 1}</span>
+        <span class="name old">${p.oldName}</span>
+        <span class="arrow">→</span>
+        <span class="name new">${p.newName}</span>
+      </div>`;
+  }).join('');
+
+  fileTable.innerHTML = `
+    <div class="file-header-row">
+      <span></span><span>원본 파일명</span><span></span><span>변경 후 파일명</span>
+    </div>
+    ${rowsHtml}
+  `;
+
+  applyNowBtn.disabled = (mode !== 'fsapi');
+  downloadBatBtn.disabled = false;
+  exportListBtn.disabled = false;
+  collectNamesBtn.disabled = false;
+}
+
+// --- 지금 바로 이름 변경 (File System Access API) ---
+applyNowBtn.addEventListener('click', async () => {
+  if(mode !== 'fsapi' || !dirHandle) return;
+  const targets = planned.filter(p => !p.collision && p.oldName !== p.newName);
+  if(targets.length === 0){
+    alert('변경할 파일이 없습니다.');
+    return;
+  }
+  if(!confirm(`총 ${targets.length}개 파일의 이름이 실제로 바뀝니다. 되돌릴 수 없습니다. 계속할까요?`)) return;
+
+  progressText.style.display = 'block';
+  let done = 0, failed = 0;
+  const failedNames = [];
+
+  for(const p of targets){
+    try{
+      const fileData = await p.entry.handle.getFile();
+      const buffer = await fileData.arrayBuffer();
+      const newHandle = await dirHandle.getFileHandle(p.newName, { create: true });
+      const writable = await newHandle.createWritable();
+      await writable.write(buffer);
+      await writable.close();
+      await dirHandle.removeEntry(p.oldName);
+      done++;
+    }catch(err){
+      failed++;
+      failedNames.push(p.oldName);
+      console.error(err);
+    }
+    progressText.textContent = `처리 중... ${done + failed} / ${targets.length}`;
+  }
+
+  progressText.textContent = failed === 0
+    ? `완료: ${done}개 파일명이 변경되었습니다.`
+    : `완료: ${done}개 성공, ${failed}개 실패 (${failedNames.slice(0,5).join(', ')}${failedNames.length>5 ? ' 등' : ''})`;
+
+  // 폴더 다시 읽기
+  entries = [];
+  for await (const [name, handle] of dirHandle.entries()){
+    if(handle.kind === 'file') entries.push({ name, handle });
+  }
+  recompute();
+});
+
+// --- 배치파일(.bat) 다운로드 ---
+downloadBatBtn.addEventListener('click', () => {
+  const targets = planned.filter(p => !p.collision && p.oldName !== p.newName);
+  if(targets.length === 0){
+    alert('변경할 파일이 없습니다.');
+    return;
+  }
+  const esc = s => s.replace(/"/g, '""');
+  const lines = ['@echo off', 'chcp 65001 > nul', 'echo 파일명 변경을 시작합니다...'];
+  targets.forEach(p => {
+    lines.push(`ren "${esc(p.oldName)}" "${esc(p.newName)}"`);
+  });
+  lines.push('echo 완료되었습니다.', 'pause');
+
+  const content = '\ufeff' + lines.join('\r\n');
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '파일명변경.bat';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// --- 파일명 모아서 엑셀로 저장 ---
+collectNamesBtn.addEventListener('click', () => {
+  const noExt = document.querySelector('input[name="collectExt"]:checked').value === 'noExt';
+  let names = planned.map(p => noExt ? splitExt(p.oldName).base : p.oldName);
+  if(document.getElementById('collectSort').checked){
+    names = names.sort((a, b) => a.localeCompare(b, 'ko'));
+  }
+  const rows = [['번호', '파일명']];
+  names.forEach((name, i) => rows.push([i + 1, name]));
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 8 }, { wch: 48 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '파일목록');
+  const today = new Date();
+  const stamp = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+  XLSX.writeFile(wb, `파일명목록_${stamp}.xlsx`);
+});
+
+// --- 변경 목록 엑셀로 저장 ---
+exportListBtn.addEventListener('click', () => {
+  const rows = [['번호', '원본 파일명', '변경 후 파일명', '변경 여부']];
+  planned.forEach((p, i) => {
+    rows.push([i + 1, p.oldName, p.newName, p.collision ? '이름 중복(제외)' : (p.oldName !== p.newName ? '변경됨' : '변경 없음')]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 6 }, { wch: 42 }, { wch: 42 }, { wch: 14 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '파일명변경목록');
+  const today = new Date();
+  const stamp = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
+  XLSX.writeFile(wb, `파일명변경목록_${stamp}.xlsx`);
+});
+</script>
+</body>
+</html>
